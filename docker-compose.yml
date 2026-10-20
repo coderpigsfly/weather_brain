@@ -1,0 +1,17 @@
+services:
+  weather-brain:
+    build: .
+    container_name: weather-brain
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    # TZ only sets the clock for the log's timestamps (the brain uses house.json's timezone):
+    # put TZ=<your timezone> in .env, like TZ=America/New_York
+    environment:
+      - TZ=${TZ:-UTC}
+    # Development: use the code straight from ./app and restart on changes.
+    volumes:
+      - ./app:/app
+    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8765", "--reload"]
+
+

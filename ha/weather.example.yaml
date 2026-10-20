@@ -1,0 +1,285 @@
+# /config/packages/weather.yaml
+# Voice weather report and sun times — connected to the Weather Brain
+# An example: copy it to /config/packages/weather.yaml in Home Assistant and fill in your own
+# (the brain's address, your speaker, and optionally your router agents and clips).
+# The brain (port 8765) does the forecast and sun thinking;
+# HA matches the question, speaks the answer, and plays clips.
+# Weather: today, tonight, right now, tomorrow, and named weekdays.
+# Sun: first light, sunrise (or "get light"), sunset, when it gets dark, and hours of daylight.
+# If the brain can't be reached, HA gives a basic fallback answer.
+# Optional: voice devices whose questions go to their own conversation agent (a router that asks
+# the same brain) instead of being answered here. List them in "router_agents" below (once per
+# automation): device id -> agent, both from that device's Assist debug trace (device_id, and
+# intent: engine). (A condition that skips a device doesn't work: Home Assistant then just says
+# "Done" instead of passing the sentence on.) Left empty, every device is answered here.
+# Edit with File Editor only — not the Automations UI.
+# Put your brain's address in place of <server> in the two urls below (like 192.168.1.20).
+
+rest_command:
+  weather_brain:
+    url: "http://<server>:8765/weather?when={{ when }}"
+    method: GET
+    timeout: 8
+  weather_sun:
+    url: "http://<server>:8765/sun?ask={{ ask }}&when={{ when }}"
+    method: GET
+    timeout: 8
+
+automation:
+  # ---------------- Weather report ----------------
+  - id: voice_today_weather_report
+    alias: 📦 Voice - Weather report
+    description: "Managed in /config/packages/weather.yaml. Edit with File Editor only."
+    mode: single
+    triggers:
+      - trigger: conversation
+        id: today
+        command:
+          - "(what's | what is | whats | what s) the (weather | weapon | whether) [like] [today] [outside]"
+          - "(how's | how is | hows | how s) the (weather | weapon | whether) [today] [outside]"
+          - "[give me] [the] (weather | weapon | whether) [report | forecast] [for] [today]"
+          - "tell me [about] the (weather | weapon | whether) [today]"
+      - trigger: conversation
+        id: tonight
+        command:
+          - "(what's | what is | whats | what s) the (weather | weapon | whether) [going to be] [like] (tonight | this evening | overnight)"
+          - "(how's | how is | hows | how s) the (weather | weapon | whether) [going to be] (tonight | this evening | overnight)"
+          - "[give me] [the] (weather | weapon | whether) [report | forecast] [for] (tonight | this evening | overnight)"
+          - "tell me [about] the (weather | weapon | whether) [for] (tonight | this evening | overnight)"
+      - trigger: conversation
+        id: now
+        command:
+          - "(what's | what is | whats | what s) the (weather | weapon | whether) [like] [outside] (right now | now | at the moment)"
+          - "(how's | how is | hows | how s) the (weather | weapon | whether) [outside] (right now | now)"
+      - trigger: conversation
+        id: tomorrow
+        command:
+          - "(what's | what is | whats | what s) the (weather | weapon | whether) [going to be] [like] tomorrow"
+          - "(how's | how is | hows | how s) the (weather | weapon | whether) [going to be] tomorrow"
+          - "[give me] [the] (weather | weapon | whether) [report | forecast] [for] tomorrow"
+          - "tell me [about] the (weather | weapon | whether) [for] tomorrow"
+      - trigger: conversation
+        id: day
+        command:
+          - "(what's | what is | whats | what s) the (weather | weapon | whether) [going to be] [like] [on | for | this] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "(how's | how is | hows | how s) the (weather | weapon | whether) [going to be] [on | for | this] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "[give me] [the] (weather | weapon | whether) [report | forecast] [for | on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "tell me [about] the (weather | weapon | whether) [for | on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+    actions:
+      # Devices with their own router agent: hand the words to it and say what it says.
+      # Fill in yours, like  "<device id>": conversation.<agent>   (or leave it empty: {})
+      - variables:
+          router_agents: {}
+      - if:
+          - condition: template
+            value_template: "{{ trigger.device_id in router_agents }}"
+        then:
+          - action: conversation.process
+            data:
+              agent_id: "{{ router_agents[trigger.device_id] }}"
+              text: "{{ trigger.sentence }}"
+            response_variable: agent_reply
+          - set_conversation_response: "{{ agent_reply.response.speech.plain.speech }}"
+          - stop: "answered by the router agent"
+      # Which question was asked, and which device's speaker to use.
+      # For named days, pull the day name out of what was said.
+      # Typed requests (no device) use the default speaker below.
+      - variables:
+          asked: >-
+            {%- if trigger.id == 'day' -%}
+            {{ trigger.sentence | lower | regex_findall('monday|tuesday|wednesday|thursday|friday|saturday|sunday') | first }}
+            {%- else -%}
+            {{ trigger.id }}
+            {%- endif -%}
+          player: >-
+            {% set ents = device_entities(trigger.device_id) if trigger.device_id else [] %}
+            {{ ents | select('match', 'media_player\.') | first
+               | default('media_player.your_speaker') }}
+
+      # Ask the Weather Brain. If the brain is down, keep going (fallback below).
+      - action: rest_command.weather_brain
+        data:
+          when: "{{ asked }}"
+        response_variable: brain
+        continue_on_error: true
+
+      - variables:
+          brain_ok: "{{ brain is defined and brain.status == 200 and brain.content.speech is defined }}"
+
+      # Optional: a clip only for "today" answers before noon, and only sometimes.
+      # play_chance = percent of the time a clip plays (0: never; set it once you have clips).
+      # Clips are mp3s in HA's media folder, /media/weather/<name>.mp3; put your names in the
+      # lists (more than one in a list rotates between them).
+      - variables:
+          clip: >-
+            {%- set play_chance = 0 -%}
+            {%- set category = brain.content.category if brain_ok else '' -%}
+            {%- set period = brain.content.period if brain_ok else '' -%}
+            {%- if period != 'today' or now().hour >= 12 -%}
+            {%- elif (range(100) | random) >= play_chance -%}
+            {%- elif category == 'rain' -%}
+            {{ ['rain1', 'rain2'] | random }}
+            {%- elif category == 'cloudy' -%}
+            {{ ['clouds1'] | random }}
+            {%- elif category == 'nice' -%}
+            {{ ['nice1'] | random }}
+            {%- endif -%}
+
+      # Hand the clip to the helper script (runs in the background,
+      # waits for the reply to finish, then plays).
+      - if:
+          - condition: template
+            value_template: "{{ clip != '' }}"
+        then:
+          - action: script.turn_on
+            target:
+              entity_id: script.weather_play_clip
+            data:
+              variables:
+                player: "{{ player }}"
+                satellite: "{{ trigger.satellite_id | default('', true) }}"
+                clip: "{{ clip }}"
+
+      # Spoken reply: the brain's answer, or a basic fallback.
+      - set_conversation_response: >-
+          {%- if brain_ok -%}
+          {{ brain.content.speech }}
+          {%- else -%}
+          {%- set names = {'clear-night':'clear', 'cloudy':'cloudy', 'exceptional':'unusual conditions', 'fog':'foggy', 'hail':'hail', 'lightning':'stormy', 'lightning-rainy':'thunderstorms', 'partlycloudy':'partly cloudy', 'pouring':'heavy rain', 'rainy':'rainy', 'snowy':'snowy', 'snowy-rainy':'sleet', 'sunny':'sunny', 'windy':'windy', 'windy-variant':'windy and cloudy'} -%}
+          {%- set cond = states('weather.nws_home') -%}
+          It's {{ state_attr('weather.nws_home', 'temperature') | round(0) | int }} degrees and {{ names.get(cond, cond) }}. I couldn't reach the full forecast just now.
+          {%- endif -%}
+
+  # ---------------- Sun times ----------------
+  - id: voice_sun_times
+    alias: 📦 Voice - Sun times
+    description: "Managed in /config/packages/weather.yaml. Edit with File Editor only."
+    mode: single
+    triggers:
+      - trigger: conversation
+        id: sunset
+        command:
+          - "(when's | when is | whens | what time is) [the | a] (sunset | sun set) [today | tonight | this evening | tomorrow]"
+          - "(when's | when is | whens | what time is) [the | a] (sunset | sun set) [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "(when | what time) (does | will) [the | a] sun (set | sets | go down) [today | tonight | this evening | tomorrow]"
+          - "(when | what time) (does | will) [the | a] sun (set | sets | go down) [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "(when's | when is | whens | what time is) the sun (going down | setting) [today | tonight | this evening | tomorrow]"
+          - "(when's | when is | whens | what time is) the sun (going down | setting) [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+      - trigger: conversation
+        id: sunrise
+        command:
+          - "(when's | when is | whens | what time is) [the | a] (sunrise | sun rise) [today | this morning | tomorrow]"
+          - "(when's | when is | whens | what time is) [the | a] (sunrise | sun rise) [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "(when | what time) (does | will) [the | a] sun (rise | rises | come up) [today | this morning | tomorrow]"
+          - "(when | what time) (does | will) [the | a] sun (rise | rises | come up) [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "(when's | when is | whens | what time is) the sun (coming up | rising) [today | this morning | tomorrow]"
+          - "(when's | when is | whens | what time is) the sun (coming up | rising) [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "(when | what time) (does | will | will') [it] get (light | late | lite) [out | outside] [today | this morning | in the morning | tomorrow]"
+          - "(when | what time) (does | will | will') [it] get (light | late | lite) [out | outside] [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "(when's | when is | whens) it (getting | gonna get | going to get) (light | late | lite) [out | outside] [today | this morning | in the morning | tomorrow]"
+          - "(when's | when is | whens) it (getting | gonna get | going to get) (light | late | lite) [out | outside] [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+      - trigger: conversation
+        id: first_light
+        command:
+          - "[when's | when is | whens | what time is | l's | els] [the] (first light | daybreak | break of day) [today | this morning | tomorrow]"
+          - "[when's | when is | whens | what time is | l's | els] [the] (first light | daybreak | break of day) [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+      - trigger: conversation
+        id: dark
+        command:
+          - "(when | what time) (does | will | will') [it] get dark [out | outside] [today | tonight | this evening | tomorrow]"
+          - "(when | what time) (does | will | will') [it] get dark [out | outside] [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "(when's | when is | whens) (dark | dusk) [today | tonight | this evening | tomorrow]"
+          - "(when's | when is | whens) it (getting | gonna get | going to get) dark [out | outside] [today | tonight | this evening | tomorrow]"
+          - "(when's | when is | whens) it (getting | gonna get | going to get) dark [out | outside] [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+      - trigger: conversation
+        id: daylight
+        command:
+          - "how much daylight [is there] [today | tomorrow]"
+          - "how much daylight [is there] [on] (monday | tuesday | wednesday | thursday | friday | saturday | sunday)"
+          - "how long is the day [today | tomorrow]"
+    actions:
+      # Devices with their own router agent: hand the words to it and say what it says.
+      # Fill in yours, like  "<device id>": conversation.<agent>   (or leave it empty: {})
+      - variables:
+          router_agents: {}
+      - if:
+          - condition: template
+            value_template: "{{ trigger.device_id in router_agents }}"
+        then:
+          - action: conversation.process
+            data:
+              agent_id: "{{ router_agents[trigger.device_id] }}"
+              text: "{{ trigger.sentence }}"
+            response_variable: agent_reply
+          - set_conversation_response: "{{ agent_reply.response.speech.plain.speech }}"
+          - stop: "answered by the router agent"
+      # What was asked (first_light, sunrise, sunset, dark, daylight) and for which day.
+      - variables:
+          ask: "{{ trigger.id }}"
+          when: >-
+            {%- set said = trigger.sentence | lower -%}
+            {%- set days = said | regex_findall('monday|tuesday|wednesday|thursday|friday|saturday|sunday') -%}
+            {%- if 'tomorrow' in said -%}
+            tomorrow
+            {%- elif days -%}
+            {{ days | first }}
+            {%- else -%}
+            today
+            {%- endif -%}
+
+      # Ask the Weather Brain. If the brain is down, keep going (fallback below).
+      - action: rest_command.weather_sun
+        data:
+          ask: "{{ ask }}"
+          when: "{{ when }}"
+        response_variable: sun_reply
+        continue_on_error: true
+
+      # Spoken reply: the brain's answer, or HA's own sun entity as a fallback.
+      - set_conversation_response: >-
+          {%- if sun_reply is defined and sun_reply.status == 200 and sun_reply.content.speech is defined -%}
+          {{ sun_reply.content.speech }}
+          {%- elif ask == 'sunrise' -%}
+          The next sunrise is at {{ as_timestamp(state_attr('sun.sun', 'next_rising')) | timestamp_custom('%-I:%M') }}.
+          {%- elif ask == 'sunset' -%}
+          The next sunset is at {{ as_timestamp(state_attr('sun.sun', 'next_setting')) | timestamp_custom('%-I:%M') }}.
+          {%- else -%}
+          I couldn't reach my sun tables just now.
+          {%- endif -%}
+
+script:
+  weather_play_clip:
+    alias: 📦 Weather - play clip after reply
+    description: "Managed in /config/packages/weather.yaml. Edit with File Editor only."
+    mode: restart
+    fields:
+      player:
+        description: Media player to play the clip on
+      satellite:
+        description: Satellite that asked (blank for typed requests)
+      clip:
+        description: Clip file name without .mp3
+    sequence:
+      # Wait for the assistant to finish speaking before playing.
+      - if:
+          - condition: template
+            value_template: "{{ satellite != '' }}"
+        then:
+          # First wait for her to start speaking...
+          - wait_template: "{{ is_state(satellite, 'responding') }}"
+            timeout: "00:00:10"
+          # ...then wait for her to finish.
+          - wait_template: "{{ is_state(satellite, 'idle') }}"
+            timeout: "00:01:00"
+          - delay: "00:00:01"
+      - action: media_player.play_media
+        target:
+          entity_id: "{{ player }}"
+        data:
+          announce: true
+          media:
+            media_content_id: "media-source://media_source/local/weather/{{ clip }}.mp3"
+            media_content_type: music
+            metadata: {}
+
+

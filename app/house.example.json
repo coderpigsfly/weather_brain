@@ -1,0 +1,118 @@
+{
+  "_about": "An example: copy it to house.json and fill in your own place. The weather brain reads house.json, else this file.",
+  "place": {
+    "name": "Your Town",
+    "region": "",
+    "latitude": 0.0,
+    "longitude": 0.0,
+    "timezone": "UTC"
+  },
+  "home_words": [
+    "your town",
+    "here",
+    "home",
+    "outside",
+    "my house",
+    "the house",
+    "my area",
+    "the area",
+    "my yard",
+    "the yard"
+  ],
+  "day": {
+    "about": "A day runs midnight to midnight. today: the rest of the day until evening_starts; from then on today and tonight both answer tonight; tonight asked at any hour is that day's evening. Tonight's low and frost are looked up until night_ends the next morning.",
+    "morning_starts": "00:01",
+    "evening_starts": "17:00",
+    "night_ends": "07:00"
+  },
+  "forecast": {
+    "source": "National Weather Service",
+    "grid": {
+      "office": "",
+      "x": 0,
+      "y": 0
+    },
+    "contact": "you@example.com",
+    "timeout_seconds": 5.0,
+    "cache_seconds": 600,
+    "how": "Your grid: open https://api.weather.gov/points/<latitude>,<longitude> and copy gridId, gridX and gridY. The contact goes in the User-Agent the Weather Service asks for."
+  },
+  "normals": {
+    "about": "Your nearest station's monthly normals (NCEI 1991-2020): month number -> high, low, precip_in, snow_in",
+    "unusual_degrees": 10,
+    "months": {
+      "1": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "2": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "3": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "4": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "5": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "6": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "7": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "8": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "9": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "10": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "11": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      },
+      "12": {
+        "high": 0,
+        "low": 0,
+        "precip_in": 0.0,
+        "snow_in": 0.0
+      }
+    }
+  }
+}

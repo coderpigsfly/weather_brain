@@ -1,0 +1,18 @@
+# release.yaml - what goes from this development repo (private) to the public one.
+# Only tools/release.py publishes, and only after showing you what goes out and asking.
+#   python3 tools/release.py --check    see what would go out; nothing is published
+#   python3 tools/release.py            publish (asks first)
+# Not released yet: set public: (and version:) when you're ready. Keep version: the same as
+# app/version.py (what the brain's own spec says).
+
+version: 1.0.0            # the next public release; tagged v1.0.0 there, release-v1.0.0 here
+public: git@github.com:coderpigsfly/weather_brain.git                # the public repo's address once you make it, like git@github.com:<name>/<repo>.git
+branch: main              # the public repo's branch
+email: 20612498+coderpigsfly@users.noreply.github.com   # the public commits' email (GitHub's noreply: your own stays private)
+
+never:                    # never published (a folder ends with /)
+  - .env
+  - app/house.json         # your house: place, forecast grid, your contact email, normals (house.example.json ships)
+  - ha/weather.yaml        # your Home Assistant package: your brain's address, devices, speakers, clips (weather.example.yaml ships)
+
+skeletons: ""             # none yet
