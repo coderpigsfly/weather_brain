@@ -37,5 +37,22 @@ case("A date with its year, gone by: said so", reason("Will it rain on October 1
 case("A date and no time word still counts as when", server._time_said(server._clean("rain on november 1")), True)
 case("Within the week: that day (the window is the weekday)", server._window("wednesday") and server._date_ahead("october 21", now), 2)
 
+r = server.ask(text="Is it going to rain for the picnic", context=[], pretend_time=NOW)
+case("No day, a thing only its name dates: it needs when (the router fills it or asks)", (r["status"], r["need"], r["about"]),
+     ("need", "when", "the picnic"))
+case("The thing with its day said: answered for that day", reason("Is it going to rain for the picnic on Wednesday"), "wednesday")
+case("A plain weather question with no day is today's", reason("Is it going to rain"), "today")
+case("At home is never a thing to date", reason("Will it be cold at the house"), "today")
+r = server.ask(text="Will it snow on the Feast of Steven when I am at the picnic", context=[], pretend_time=NOW)
+case("The thing's name stops at the little words: the feast of steven", (r["status"], r.get("about")), ("need", "the feast of steven"))
+case("The day put in by the router: too far", reason("Will it snow on Saturday, December 26 when I am at the picnic"), "too_far")
+
+spec = server.app.openapi()
+reply = spec["paths"]["/ask"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+case("Its OpenAPI document says what /ask replies: need names a parameter GET /weather takes",
+     ("need" in reply["properties"]["status"]["enum"], reply["properties"]["need"]["enum"],
+      "when" in [p["name"] for p in spec["paths"]["/weather"]["get"]["parameters"]]), (True, ["when"], True))
+case("Its Wepwawet section adds nothing to the standard for it", "needs" in (spec.get("x-wepwawet") or {}).get("answers", {}), False)
+
 print(f"\n{'all pass' if not FAILED else str(len(FAILED)) + ' fail'}")
 sys.exit(1 if FAILED else 0)

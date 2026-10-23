@@ -5,7 +5,7 @@
 # Not released yet: set public: (and version:) when you're ready. Keep version: the same as
 # app/version.py (what the brain's own spec says).
 
-version: 1.0.0            # the next public release; tagged v1.0.0 there, release-v1.0.0 here
+version: 2026.10.0         # the next public release: year.month.release (like Home Assistant); tagged v2026.10.0 there, release-v2026.10.0 here; app/version.py matches
 public: git@github.com:coderpigsfly/weather_brain.git                # the public repo's address once you make it, like git@github.com:<name>/<repo>.git
 branch: main              # the public repo's branch
 email: 20612498+coderpigsfly@users.noreply.github.com   # the public commits' email (GitHub's noreply: your own stays private)

@@ -115,6 +115,10 @@ def sun_answer(
 # The brain decides what it can answer and always replies with a status:
 #   answered     -> speech is the answer
 #   out_of_reach -> reason (too_far, span, place) and an honest line to speak
+#   need         -> need (when: the parameter GET /weather and GET /sun take) and about (the picnic): it's
+#                   asked about a day it can't place ("Is it going to rain for the picnic?"), so the
+#                   router may fill it (another app's picnic, its date) or ask, and ask again with the day;
+#                   speech is an honest line. All of it in the OpenAPI document (ASK_REPLY).
 # context: earlier requests in the conversation, newest first. For each piece
 # (time, sun or weather, place) the new words win; context only fills gaps.
 
@@ -250,6 +254,18 @@ def _weathery(text):
     return any(_has(text, w) for w in WEATHER_WORDS)
 
 
+# Asked whether a request is its own at all (claim: a voice system that hasn't routed it here, dev-house-router
+# #28): only words about the weather or the sun make it the brain's. These count then too, beside WEATHER_WORDS
+# and the sun words; "outside" alone doesn't ("outside the box").
+CLAIM_WORDS = {"degrees", "humid", "humidity", "heat", "chilly", "breezy", "hail", "tornado", "hurricane", "drizzle",
+               "showers", "sunscreen", "nice out", "nice outside"}
+
+
+def _claims(text):
+    """Is this a weather or sun question at all (for claim)?"""
+    return _weathery(text) or bool(_sun_word(text)) or any(_has(text, w) for w in CLAIM_WORDS)
+
+
 def _sun(text):
     """Which sun answer this text wants. A loose word next to weather words
     ("rain after dark") is a weather question, not a sun one."""
@@ -259,19 +275,72 @@ def _sun(text):
     return SUN_WORDS[word]
 
 
+EVENT = re.compile(r"\b(?:for|at|during|before|after|on) (?:the|my|our|your|a|an) ([a-z][a-z']*(?: [a-z][a-z']*){0,3})")
+
+
+EVENT_STOP = {"when", "while", "if", "and", "so", "because", "i", "we", "you", "it", "is", "are", "will"}
+
+
+def _event(text):
+    """The thing a request is about that only says when by its name ("for the picnic", "at our party"):
+    "the picnic", else None. A time, a place at home or a weather word is never one."""
+    for m in EVENT.finditer(text):
+        words = []
+        for w in m.group(1).split():
+            if w in TIME_WORDS or w in PLACE_STOP or w in WEATHER_WORDS or w in SUN_WORDS or w in EVENT_STOP:
+                break
+            words.append(w)
+        name = " ".join(words)
+        if words and not ({name, "the " + name, "my " + name, "our " + name} & set(HOME)):
+            return "the " + " ".join(words)
+    return None
+
+
+def _need(what, about):
+    return {"status": "need", "need": what, "about": about, "speech": phrases.say("need_" + what, about=about)}
+
+
 def _out_of_reach(reason, **values):
     return {"status": "out_of_reach", "reason": reason, **values,
             "speech": phrases.say(reason, **values)}
 
 
-@app.get("/ask")
+# What /ask replies, in its OpenAPI document: a voice system reads it there (need names the parameter it's
+# missing by its name on GET /weather and GET /sun, so the system knows what to fill or ask for)
+ASK_REPLY = {
+    "type": "object",
+    "required": ["status"],
+    "properties": {
+        "status": {"type": "string", "enum": ["answered", "out_of_reach", "not_mine", "need"],
+                   "description": "answered: speech is the answer. out_of_reach: an honest line, why in reason. "
+                                  "not_mine: not a weather or sun question, pass it on. need: it can't place the day; "
+                                  "fill the parameter named in need (from what about names) and ask again, or ask the person"},
+        "speech": {"type": "string", "description": "what to say (for need: an honest line, for a system that can't fill it)"},
+        "reason": {"type": "string", "enum": ["too_far", "past", "span", "place", "not_a_sun_question", "not_weather"]},
+        "need": {"type": "string", "enum": ["when"],
+                 "description": "the parameter it's missing, as GET /weather and GET /sun name it (when: a day)"},
+        "about": {"type": "string", "description": "what the missing value belongs to, as said: \"the picnic\""},
+        "topic": {"type": "string", "enum": ["weather", "sun"]},
+        "when": {"type": "string", "description": "the day it answered for (today, tomorrow, a weekday, tonight, now)"},
+        "detail": {"type": "object", "description": "the answer's parts (the forecast or sun times it was made from)"},
+        "place": {"type": "string", "description": "out_of_reach place: the place asked about"},
+    },
+}
+
+
+@app.get("/ask", responses={200: {"description": "the brain's reply, always with a status",
+                                  "content": {"application/json": {"schema": ASK_REPLY}}}})
 def ask(
     text: str = Query(..., min_length=1, description="the request, as the person said it"),
     context: List[str] = Query([], description="earlier requests, newest first"),
     pretend_time: Optional[str] = Query(None, description=PRETEND_HELP),
+    claim: bool = Query(False, description="the asker hasn't routed it here and asks whether it's the brain's at all: "
+                                           "not_mine unless the words are about the weather or the sun"),
 ):
     """The router's door: the brain reads the words and decides what it can answer."""
     texts = [_clean(text)] + [_clean(c) for c in context]
+    if claim and not _claims(texts[0]):
+        return {"status": "not_mine", "reason": "not_weather"}
 
     # a loose sun word ("dark", "get light") that isn't asking when -> not ours
     word = _sun_word(texts[0])
@@ -285,6 +354,9 @@ def ask(
 
     if place:
         return _out_of_reach("place", place=place.title())
+    event = _event(texts[0])
+    if not timed and event and not sun:
+        return _need("when", event)       # "rain for the picnic": a day only its name says
     if any(_has(timed, p) for p in TOO_FAR):
         return _out_of_reach("too_far")
     if any(_has(timed, p) for p in SPAN):

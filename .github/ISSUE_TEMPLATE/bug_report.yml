@@ -1,0 +1,40 @@
+name: Bug report
+description: "Something in Weather Brain doesn't work as it should"
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: "What happened"
+      description: "And what you expected instead."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to reproduce"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: "Weather Brain version"
+      description: "From `app/version.py`, or the API page's title."
+    validations:
+      required: true
+  - type: input
+    id: call
+    attributes:
+      label: "The call or question"
+      description: "Like: GET /forecast, or what was asked by voice."
+  - type: input
+    id: area
+    attributes:
+      label: "Area"
+      description: "Your state or nearest large city is enough (US only)."
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Logs"
+      description: "From `docker compose logs weather-brain`. Leave out anything private: names, addresses, tokens."
+      render: text

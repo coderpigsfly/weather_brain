@@ -117,7 +117,15 @@ Every door takes `pretend_time=` (like `2026-10-19T21:00`) to ask as if it were 
 
 ## Version
 
-`app/version.py` holds the version its spec shows (`info: version:`). Change it with every release.
+`app/version.py` holds the version its spec shows (`info: version:`). Versions are year.month.release,
+the way Home Assistant numbers its own: 2026.10.0 is the first release in October 2026, 2026.10.1 the next.
+What changed in each is in [CHANGELOG.md](CHANGELOG.md).
+
+## About this project
+
+Built on the author's own code base, with AI-assisted extensions and clean-up.
+The documentation was written with AI and proofread by a second AI, under the
+author's direction and review.
 
 ## License
 

@@ -241,4 +241,8 @@ PHRASES.update({
         "I only know the weather here at home, not in {place}.",
         "I only keep an eye on the sky right here, not {place}.",
     ],
+    "need_when": [
+        "I'd need to know when {about} is.",
+        "I can tell you once I know the day of {about}.",
+    ],
 })
